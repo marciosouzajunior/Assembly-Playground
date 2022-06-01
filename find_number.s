@@ -27,10 +27,6 @@ start_loop:
 	movl %eax, %ecx
 	jmp print_char
 
-loop_exit:
-	movl $1, %eax
-	int $0x80
-
 print_char:
 	# preparing to make a syscall, will print the value in ecx register
 	movl $4, %eax			# sys_write
@@ -43,4 +39,8 @@ print_char:
 	movl $charToPrint, %ecx		# save the adrress of buffer in ecx
 
 	int $0x80
-	jmp loop_exit
+	jmp exit_program
+
+exit_program:
+        movl $1, %eax
+        int $0x80
