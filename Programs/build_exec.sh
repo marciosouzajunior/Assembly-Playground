@@ -13,5 +13,4 @@ as $source -o $output
 ld $output -o $binary
 echo "executing"
 ./$binary
-echo ""
 echo "result: $(echo $?)"
