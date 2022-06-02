@@ -5,3 +5,8 @@
 This is just a place where you can have fun with low-level programming.
 
 Some code is from (or inspired by) the book [Programming from the Ground Up](https://download-mirror.savannah.gnu.org/releases/pgubook/ProgrammingGroundUp-1-0-booksize.pdf).
+
+Folders:
+
+* **Programs**: Pure assembly programs written in AT&T syntax and supported by the GNU assembler.
+* **AssemblyInterpreter**: A Java assembly interpreter developed for educational purposes.
