@@ -1,3 +1,6 @@
+import java.util.HashMap;
+import java.util.regex.Pattern;
+
 public class AssemblyInterpreter {
 
     // Memory to store programs and data (there is no difference between then, except how it is used).
@@ -8,15 +11,27 @@ public class AssemblyInterpreter {
     int eip = 0;
 
     // General registers
-    String eax = "";
-    String ebx = "";
+    HashMap<String, String> cpu = new HashMap<String, String>() {{
+        put("%eax", "0");
+        put("%ebx", "0");
+        put("%ecx", "0");
+    }};
+
+    // Patterns used to identify addressing modes
+    static Pattern IMMEDIATE_PATTERN = Pattern.compile("^\\$[a-zA-Z0-9_]+$"); // $12
+    static Pattern REGISTER_PATTERN = Pattern.compile("^%[a-z]{3}$"); // %eax
+    static Pattern DIRECT_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$"); // ADDRESS
+    static Pattern INDEXED_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+\\((%[a-z]{3})*,(%[a-z]{3})*,[124]*\\)$"); // string_start(,%ecx,1)
+    static Pattern INDIRECT_PATTERN = Pattern.compile("^\\(%[a-z]{3}\\)$"); // (%eax)
+    static Pattern BASE_PATTERN = Pattern.compile("^[0-9]+\\(%[a-z]{3}\\)$"); // 4(%eax)
 
     public static void main(String[] args) {
 
         AssemblyInterpreter asmi = new AssemblyInterpreter();
 
+        //asmi.memory[10] = "movl 100(,%ecx,1), %eax";
         asmi.memory[10] = "movl $1, %eax";
-        //asmi.memory[11] = "movl (%eax), %ebx"; //"mov $1, %eax";
+        //asmi.memory[10] = "movl 4(%eax), %ebx";
         //asmi.memory[12] = "movl $2, %ebx";
         asmi.memory[11] = "int 0x80";
 
@@ -30,7 +45,7 @@ public class AssemblyInterpreter {
         do {
 
             String instruction = memory[eip];
-            String instructionParts[] = instruction.split(" ");
+            String[] instructionParts = instruction.split(" ");
 
             switch (instructionParts[0]) {
                 case "movl":
@@ -51,95 +66,155 @@ public class AssemblyInterpreter {
 
         String num = instructionParts[1].replace(",", "");
         if (num.equals("0x80")) {
-            System.exit(Integer.valueOf(eax));
+            System.exit(0);
         }
 
     }
 
     private void movl(String[] instructionParts) {
 
-        String source = instructionParts[1].replace(",", "");
+        String source = instructionParts[1];
         String destination = instructionParts[2];
 
-        //
-        // Handle source addressing
-        //
-        if (source.startsWith("$")) {
+        source = handleSourceAddressing(source);
+        handleDestinationAddressing(source, destination);
 
-            // Immediate mode, the data to access is embedded in the instruction itself.
-            source = source.replace("$", "");
+    }
 
-        } else if (source.startsWith("%")) {
+    private String handleSourceAddressing(String source) {
 
-            // Register mode simply moves data in or out of a register.
-            if (source.equals("%eax")) {
-                source = eax;
-            } else if (source.equals("%ebx")) {
-                source = ebx;
-            }
+        source = source.substring(0, source.length() - 1); // Removes last comma
 
-        } else if (source.contains("(")) {
+        // Immediate mode
+        // The data to access is embedded in the instruction itself.
+        if (IMMEDIATE_PATTERN.matcher(source).matches()) {
+            return source.substring(1); // Removes the $
+        }
 
-            // Indirect addressing mode, the instruction contains a register
-            // that contains a pointer to where the data should be accessed.
+        // Register addressing mode
+        // The instruction contains a register to access, rather than a memory location.
+        if (REGISTER_PATTERN.matcher(source).matches()) {
+            return cpu.get(source);
+        }
+
+        // Direct addressing mode
+        // The instruction contains the memory address to access.
+        if (DIRECT_PATTERN.matcher(source).matches()) {
+            return memory[Integer.parseInt(source)];
+        }
+
+        // Indexed addressing mode
+        // The instruction contains a memory address to access,
+        // and also specifies an index register to offset that address.
+        if (INDEXED_PATTERN.matcher(source).matches()) {
+            int finalAddress = calculateIndexedAddressing(source);
+            return memory[finalAddress];
+        }
+
+        // Indirect addressing mode
+        // The instruction contains a register that contains a
+        // pointer to where the data should be accessed.
+        if (INDIRECT_PATTERN.matcher(source).matches()) {
+            source = source.substring(1, 5); // Removes ()
+            source = cpu.get(source);
+            return memory[Integer.parseInt(source)];
+        }
+
+        // Base pointer addressing mode
+        // Similar to indirect addressing, but also include a number called the
+        // offset to add to the register’s value before using it for lookup.
+        if (BASE_PATTERN.matcher(source).matches()) {
             String offset = source.substring(0, source.indexOf("("));
-            if (offset.equals("")) {
-                offset = "0";
-            }
-            String address = source.substring(source.indexOf("(") + 1, source.length() - 1);
-
-            if (address.equals("%eax")) {
-                source = memory[Integer.valueOf(eax) + Integer.valueOf(offset)];
-            } else if (address.equals("%ebx")) {
-                source = memory[Integer.valueOf(ebx) + Integer.valueOf(offset)];
-            } else {
-                source = memory[Integer.valueOf(address) + Integer.valueOf(offset)];
-            }
-
-        } else {
-
-            // Direct addressing mode, the instruction contains the memory address to access.
-            source = memory[Integer.valueOf(source)];
-
+            source = source.substring(source.indexOf("(") + 1, source.length() - 1);
+            source = cpu.get(source);
+            return memory[Integer.parseInt(source) + Integer.parseInt(offset)];
         }
 
-        //
-        // Handle destination addressing
-        //
-        if (destination.startsWith("%")) {
+        return null;
 
-            // Register mode simply moves data in or out of a register.
-            if (destination.equals("%eax")) {
-                eax = source;
-            } else if (destination.equals("%ebx")) {
-                ebx = source;
-            }
+    }
 
-        } else if (destination.contains("(")) {
+    private void handleDestinationAddressing(String source, String destination) {
 
-            // Indirect addressing mode, the instruction contains a register
-            // that contains a pointer to where the data should be accessed.
+        // Register addressing mode
+        // The instruction contains a register to access, rather than a memory location.
+        if (REGISTER_PATTERN.matcher(destination).matches()) {
+            cpu.replace(destination, source);
+            return;
+        }
+
+        // Direct addressing mode
+        // The instruction contains the memory address to access.
+        if (DIRECT_PATTERN.matcher(destination).matches()) {
+            memory[Integer.parseInt(destination)] = source;
+            return;
+        }
+
+        // Indexed addressing mode
+        // The instruction contains a memory address to access,
+        // and also specifies an index register to offset that address.
+        if (INDEXED_PATTERN.matcher(destination).matches()) {
+            int finalAddress = calculateIndexedAddressing(destination);
+            memory[finalAddress] = source;
+        }
+
+        // Indirect addressing mode
+        // The instruction contains a register that contains a
+        // pointer to where the data should be accessed.
+        if (INDIRECT_PATTERN.matcher(destination).matches()) {
+            destination = destination.substring(1, 5); // Removes ()
+            destination = cpu.get(destination);
+            memory[Integer.parseInt(destination)] = source;
+        }
+
+        // Base pointer addressing mode
+        // Similar to indirect addressing, but also include a number called the
+        // offset to add to the register’s value before using it for lookup.
+        if (BASE_PATTERN.matcher(destination).matches()) {
             String offset = destination.substring(0, destination.indexOf("("));
-            if (offset.equals("")) {
-                offset = "0";
-            }
-            String address = destination.substring(destination.indexOf("(") + 1, destination.length() - 1);
-
-            if (destination.equals("%eax")) {
-                memory[Integer.valueOf(eax) + Integer.valueOf(offset)] = source;
-            } else if (address.equals("%ebx")) {
-                memory[Integer.valueOf(ebx) + Integer.valueOf(offset)] = source;
-            } else {
-                memory[Integer.valueOf(address) + Integer.valueOf(offset)] = source;
-            }
-
-        } else {
-
-            // Direct addressing mode, the instruction contains the memory address to access.
-            memory[Integer.valueOf(destination)] = source;
-
+            destination = destination.substring(destination.indexOf("(") + 1, destination.length() - 1);
+            destination = cpu.get(destination);
+            memory[Integer.parseInt(destination) + Integer.parseInt(offset)] = source;
         }
 
+    }
+
+    private int calculateIndexedAddressing(String operand) {
+
+        /*
+        The general form of memory address references is this:
+        ADDRESS_OR_OFFSET(%BASE_OR_OFFSET,%INDEX,MULTIPLIER)
+        All of the fields are optional. To calculate the address, simply perform the following calculation:
+        FINAL ADDRESS = ADDRESS_OR_OFFSET + %BASE_OR_OFFSET + MULTIPLIER * %INDEX
+        */
+
+        String ADDRESS_OR_OFFSET = operand.substring(0, operand.indexOf("("));
+        String FIELDS = operand.substring(operand.indexOf("(") + 1, operand.indexOf(")"));
+        String[] FIELDS_PARTS = FIELDS.split(",");
+
+        String BASE_OR_OFFSET = FIELDS_PARTS[0];
+        if (BASE_OR_OFFSET.equals("")) {
+            BASE_OR_OFFSET = "0";
+        } else {
+            BASE_OR_OFFSET = cpu.get(BASE_OR_OFFSET);
+        }
+
+        String INDEX = FIELDS_PARTS[1];
+        if (INDEX.equals("")) {
+            INDEX = "0";
+        } else {
+            INDEX = cpu.get(INDEX);
+        }
+
+        String MULTIPLIER = FIELDS_PARTS[2];
+        if (MULTIPLIER.equals("")) {
+            MULTIPLIER = "1";
+        }
+
+        return Integer.parseInt(ADDRESS_OR_OFFSET)
+                + Integer.parseInt(BASE_OR_OFFSET)
+                + Integer.parseInt(MULTIPLIER)
+                * Integer.parseInt(INDEX);
     }
 
 }
