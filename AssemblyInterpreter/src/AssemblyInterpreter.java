@@ -64,7 +64,7 @@ public class AssemblyInterpreter {
 
     private void interrupt(String[] instructionParts) {
 
-        String num = instructionParts[1].replace(",", "");
+        String num = instructionParts[1];
         if (num.equals("0x80")) {
             System.exit(0);
         }
