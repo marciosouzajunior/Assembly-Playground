@@ -1,3 +1,5 @@
+import sun.security.ssl.Debug;
+
 import java.util.HashMap;
 import java.util.regex.Pattern;
 
@@ -29,11 +31,23 @@ public class AssemblyInterpreter {
 
         AssemblyInterpreter asmi = new AssemblyInterpreter();
 
+        // Just testing move instruction
         //asmi.memory[10] = "movl 100(,%ecx,1), %eax";
-        asmi.memory[10] = "movl $1, %eax";
+        //asmi.memory[10] = "movl $1, %eax";
         //asmi.memory[10] = "movl 4(%eax), %ebx";
         //asmi.memory[12] = "movl $2, %ebx";
-        asmi.memory[11] = "int 0x80";
+
+        // Load some values in memory
+        asmi.memory[90] = "1";
+        asmi.memory[91] = "2";
+        asmi.memory[92] = "3";
+        asmi.memory[93] = "4";
+        asmi.memory[94] = "5";
+
+        // put value at location 90 in ebx to show once program exits
+        asmi.memory[10] = "movl 90, %ebx";
+        asmi.memory[11] = "movl $1, %eax";
+        asmi.memory[12] = "int $0x80";
 
         asmi.eip = 10;
         asmi.run();
@@ -64,9 +78,27 @@ public class AssemblyInterpreter {
 
     private void interrupt(String[] instructionParts) {
 
+        // The int stands for interrupt. The 0x80 is the interrupt number to use.
+        // An interrupt interrupts the normal program flow, and transfers control from our program
+        // to Linux so that it will do a system call. You can think of it as like signaling Batman.
+
         String num = instructionParts[1];
-        if (num.equals("0x80")) {
-            System.exit(0);
+        if (num.equals("$0x80")) {
+
+            // Linux knows which system call we want to access by what we stored in the
+            // %eax register. Each system call has other requirements as to what needs to
+            // be stored in the other registers.
+
+            switch (cpu.get("%eax")) {
+
+                // System call number 1 is the exit system call,
+                // which requires the status code to be placed in %ebx.
+                case "1":
+                    System.out.println("exit status: " + cpu.get("%ebx"));
+                    System.exit(0);
+                    break;
+            }
+
         }
 
     }
