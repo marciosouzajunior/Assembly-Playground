@@ -4,7 +4,8 @@ import java.util.regex.Pattern;
 public class AssemblyInterpreter {
 
     // Memory to store programs and data (there is no difference between then, except how it is used).
-    String[] memory = new String[100];
+    static int MEMORY_SIZE = 100;
+    String[] memory = new String[MEMORY_SIZE];
 
     // CPU registers
     HashMap<String, String> cpuRegisters = new HashMap<String, String>() {{
@@ -14,14 +15,14 @@ public class AssemblyInterpreter {
         // Instruction pointer holds the memory address of the next instruction to be executed.
         put("%eip", "0");
         // The stack register, %esp, always contains a pointer to the current top of the stack, wherever it is.
-        put("%esp", String.valueOf(memory.length));
+        put("%esp", String.valueOf(MEMORY_SIZE));
     }};
 
     // Patterns used to identify addressing modes
     static Pattern IMMEDIATE_PATTERN = Pattern.compile("^\\$[a-zA-Z0-9_]+$"); // $12
     static Pattern REGISTER_PATTERN = Pattern.compile("^%[a-z]{3}$"); // %eax
     static Pattern DIRECT_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+$"); // ADDRESS
-    static Pattern INDEXED_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+\\((%[a-z]{3})*,(%[a-z]{3})*,[124]*\\)$"); // string_start(,%ecx,1)
+    static Pattern INDEXED_PATTERN = Pattern.compile("^[a-zA-Z0-9_]+\\((%[a-z]{3})*,(%[a-z]{3})*,[124]*\\)$"); // base_address(offset_address, index, size)
     static Pattern INDIRECT_PATTERN = Pattern.compile("^\\(%[a-z]{3}\\)$"); // (%eax)
     static Pattern BASE_PATTERN = Pattern.compile("^[0-9]+\\(%[a-z]{3}\\)$"); // 4(%eax)
 
@@ -42,33 +43,37 @@ public class AssemblyInterpreter {
         asmi.memory[53] = "4";
         asmi.memory[54] = "5";
 
-        // Put value at location 90 in ebx to show once program exits
-        /*
+        // Put value at location 50 in ebx to show once program exits
+
         asmi.memory[0] = "movl 50, %ebx";
         asmi.memory[1] = "movl $1, %eax";
         asmi.memory[2] = "int $0x80";
-        */
 
         // Push a value onto stack and move to exb to show once program exits
+        /*
         asmi.memory[0] = "pushl $99";
         asmi.memory[1] = "pushl $88";
         asmi.memory[2] = "movl (%esp), %ebx";
         asmi.memory[3] = "movl $1, %eax";
         asmi.memory[4] = "int $0x80";
+        */
 
         asmi.run();
 
     }
 
-    private void run() {
+    public void run() {
 
         int eip = 0;
 
         do {
 
-            String instruction = memory[eip]; // TODO: Check null instructions
-            String[] instructionParts = instruction.split(" ");
+            String instruction = memory[eip];
+            if (instruction == null) {
+                break;
+            }
 
+            String[] instructionParts = instruction.split(" ");
             switch (instructionParts[0]) {
                 case "movl":
                     movl(instructionParts);
@@ -88,16 +93,26 @@ public class AssemblyInterpreter {
 
     }
 
+    public void reset() {
+        memory = new String[MEMORY_SIZE];
+        for (String key : cpuRegisters.keySet()) {
+            cpuRegisters.replace(key, "");
+        }
+        cpuRegisters.replace("%esp", String.valueOf(MEMORY_SIZE));
+    }
+
     private void pushl(String[] instructionParts) {
 
-        // The computer’s stack lives at the very top addresses of memory.
-        // You can push values onto the top of the stack through an instruction called pushl,
-        // which pushes either a register or memory value onto the top of the stack.
-        // Well, we say it’s the top, but the "top" of the stack is actually the bottom
-        // of the stack’s memory. Although this is confusing, the reason for it is that
-        // when we think of a stack of anything - dishes, papers, etc. - we think of adding
-        // and removing to the top of it. However, in memory the stack starts at the top of
-        // memory and grows downward due to architectural considerations.
+        /*
+         The computer’s stack lives at the very top addresses of memory.
+         You can push values onto the top of the stack through an instruction called pushl,
+         which pushes either a register or memory value onto the top of the stack.
+         Well, we say it’s the top, but the "top" of the stack is actually the bottom
+         of the stack’s memory. Although this is confusing, the reason for it is that
+         when we think of a stack of anything - dishes, papers, etc. - we think of adding
+         and removing to the top of it. However, in memory the stack starts at the top of
+         memory and grows downward due to architectural considerations.
+         */
 
         String address = instructionParts[1];
         String data = getDataFromAddress(address);
@@ -110,10 +125,12 @@ public class AssemblyInterpreter {
 
     private void popl(String[] instructionParts) {
 
-        // If we want to remove something from the stack, we simply use the popl instruction,
-        // which adds 4 to %esp and puts the previous top value in whatever register you specified.
-        // pushl and popl each take one operand - the register to push onto the stack for pushl,
-        // or receive the data that is popped off the stack for popl.
+        /*
+        If we want to remove something from the stack, we simply use the popl instruction,
+        which adds 4 to %esp and puts the previous top value in whatever register you specified.
+        pushl and popl each take one operand - the register to push onto the stack for pushl,
+        or receive the data that is popped off the stack for popl.
+        */
 
         String address = instructionParts[1];
         int esp = Integer.parseInt(cpuRegisters.get("%esp"));
@@ -187,7 +204,7 @@ public class AssemblyInterpreter {
         // The instruction contains a memory address to access,
         // and also specifies an index register to offset that address.
         if (INDEXED_PATTERN.matcher(address).matches()) {
-            int finalAddress = calculateIndexedAddressing(address);
+            int finalAddress = getIndexedAddress(address);
             return memory[finalAddress];
         }
 
@@ -216,6 +233,8 @@ public class AssemblyInterpreter {
 
     private void moveDataToAddress(String data, String address) {
 
+        // Do not have immediate type, because we can't move data into a direct value.
+
         // Register addressing mode
         // The instruction contains a register to access, rather than a memory location.
         if (REGISTER_PATTERN.matcher(address).matches()) {
@@ -234,7 +253,7 @@ public class AssemblyInterpreter {
         // The instruction contains a memory address to access,
         // and also specifies an index register to offset that address.
         if (INDEXED_PATTERN.matcher(address).matches()) {
-            int finalAddress = calculateIndexedAddressing(address);
+            int finalAddress = getIndexedAddress(address);
             memory[finalAddress] = data;
         }
 
@@ -259,42 +278,42 @@ public class AssemblyInterpreter {
 
     }
 
-    private int calculateIndexedAddressing(String operand) {
+    private int getIndexedAddress(String operand) {
 
         /*
-        The general form of memory address references is this:
-        ADDRESS_OR_OFFSET(%BASE_OR_OFFSET,%INDEX,MULTIPLIER)
-        All of the fields are optional. To calculate the address, simply perform the following calculation:
-        FINAL ADDRESS = ADDRESS_OR_OFFSET + %BASE_OR_OFFSET + MULTIPLIER * %INDEX
+        The memory location is determined by the following:
+            - A base address
+            - An offset address to add to the base address
+            - An index to determine which data element to select
+            - The size of the data element
+        The format of the expression is: base_address(offset_address, index, size)
+        The data value retrieved is located at: base_address + offset_address + index * size
+        Base address and size must both be constants, while the other two must be registers.
+        If any of the pieces is left out, it is just substituted with zero in the equation.
+
+        References:
+        https://gist.github.com/DmitrySoshnikov/c67cbde1cceb0d6a194830b41baa5c8b
+        Book Programming from the Ground Up, pages 41 and 42.
         */
 
-        String ADDRESS_OR_OFFSET = operand.substring(0, operand.indexOf("("));
-        String FIELDS = operand.substring(operand.indexOf("(") + 1, operand.indexOf(")"));
-        String[] FIELDS_PARTS = FIELDS.split(",");
+        String baseAddress = operand.substring(0, operand.indexOf("("));
+        String values = operand.substring(operand.indexOf("(") + 1, operand.indexOf(")"));
+        String[] valuesParts = values.split(",", -1);
 
-        String BASE_OR_OFFSET = FIELDS_PARTS[0];
-        if (BASE_OR_OFFSET.equals("")) {
-            BASE_OR_OFFSET = "0";
-        } else {
-            BASE_OR_OFFSET = cpuRegisters.get(BASE_OR_OFFSET);
-        }
+        String offset = valuesParts[0];
+        String index = valuesParts[1];
+        String size = valuesParts[2];
 
-        String INDEX = FIELDS_PARTS[1];
-        if (INDEX.equals("")) {
-            INDEX = "0";
-        } else {
-            INDEX = cpuRegisters.get(INDEX);
-        }
+        // Handle omitted
+        offset = offset.equals("") ? "0" : cpuRegisters.get(offset);
+        index = index.equals("") ? "0" : cpuRegisters.get(index);
+        size = size.equals("") ? "1" : size;
 
-        String MULTIPLIER = FIELDS_PARTS[2];
-        if (MULTIPLIER.equals("")) {
-            MULTIPLIER = "1";
-        }
+        return Integer.parseInt(baseAddress)
+                + Integer.parseInt(offset)
+                + Integer.parseInt(index)
+                * Integer.parseInt(size);
 
-        return Integer.parseInt(ADDRESS_OR_OFFSET)
-                + Integer.parseInt(BASE_OR_OFFSET)
-                + Integer.parseInt(MULTIPLIER)
-                * Integer.parseInt(INDEX);
     }
 
 }
