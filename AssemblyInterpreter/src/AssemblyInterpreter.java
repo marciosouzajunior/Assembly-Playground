@@ -37,6 +37,7 @@ public class AssemblyInterpreter {
         //asmi.memory[0] = "movl $2, %ebx";
 
         // Load some values in memory
+        asmi.memory[49] = "label_test:";
         asmi.memory[50] = "1";
         asmi.memory[51] = "2";
         asmi.memory[52] = "3";
@@ -44,7 +45,6 @@ public class AssemblyInterpreter {
         asmi.memory[54] = "5";
 
         // Put value at location 50 in ebx to show once program exits
-
         asmi.memory[0] = "movl 50, %ebx";
         asmi.memory[1] = "movl $1, %eax";
         asmi.memory[2] = "int $0x80";
@@ -72,6 +72,7 @@ public class AssemblyInterpreter {
             if (instruction == null) {
                 break;
             }
+            instruction = replaceLabel(instruction);
 
             String[] instructionParts = instruction.split(" ");
             switch (instructionParts[0]) {
@@ -91,6 +92,12 @@ public class AssemblyInterpreter {
 
         } while (true);
 
+    }
+
+    private String replaceLabel(String instruction) {
+        String address = "";
+        // TODO: Implement the function to replace label to address
+        return address;
     }
 
     public void reset() {
