@@ -12,10 +12,10 @@ public class AssemblyInterpreter {
         put("%eax", "0");
         put("%ebx", "0");
         put("%ecx", "0");
-        // Instruction pointer holds the memory address of the next instruction to be executed.
-        put("%eip", "0");
-        // The stack register, %esp, always contains a pointer to the current top of the stack, wherever it is.
-        put("%esp", String.valueOf(MEMORY_SIZE));
+        put("%eip", "0"); // Instruction pointer holds the memory address of the next instruction to be executed.
+        put("%esp", String.valueOf(MEMORY_SIZE)); // The stack register, %esp, always contains a pointer to the current top of the stack, wherever it is.
+        put("zero_flag", ""); // This flag is set to true if the result of the instruction is zero.
+        put("sign_flag", ""); // This is set to the sign of the last result.
     }};
 
     // Patterns used to identify addressing modes
@@ -85,6 +85,12 @@ public class AssemblyInterpreter {
                 case "pushl":
                     pushl(instructionParts);
                     break;
+                case "popl":
+                    popl(instructionParts);
+                    break;
+                case "cmpl":
+                    cmpl(instructionParts);
+                    break;
             }
 
             eip++;
@@ -106,6 +112,37 @@ public class AssemblyInterpreter {
             cpuRegisters.replace(key, "");
         }
         cpuRegisters.replace("%esp", String.valueOf(MEMORY_SIZE));
+    }
+
+
+    private void cmpl(String[] instructionParts) {
+
+        // Compares two integers. It does this by subtracting the first operand from the second.
+        // It discards the results, but sets the flags accordingly. Usually used before a conditional jump.
+
+        String operand1 = instructionParts[1];
+        String operand2 = instructionParts[2];
+
+        operand1 = getDataFromAddress(operand1);
+        operand2 = getDataFromAddress(operand2);
+
+        int result = Integer.parseInt(operand1) - Integer.parseInt(operand2);
+
+        if (result == 0) {
+            cpuRegisters.replace("zero_flag", "1");
+            cpuRegisters.replace("sign_flag", "0");
+        } else if (result > 0) {
+            cpuRegisters.replace("zero_flag", "0");
+            cpuRegisters.replace("sign_flag", "0");
+        } else if (result < 0) {
+            cpuRegisters.replace("zero_flag", "0");
+            cpuRegisters.replace("sign_flag", "1");
+        }
+
+        // Reference: https://reverseengineering.stackexchange.com/a/20897
+        // need to think better on this...
+
+
     }
 
     private void pushl(String[] instructionParts) {
