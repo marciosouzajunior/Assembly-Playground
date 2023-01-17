@@ -8,14 +8,13 @@ public class AssemblyInterpreter {
     String[] memory = new String[MEMORY_SIZE];
 
     // CPU registers
-    HashMap<String, String> cpuRegisters = new HashMap<String, String>() {{
-        put("%eax", "0");
-        put("%ebx", "0");
-        put("%ecx", "0");
-        put("%eip", "0"); // Instruction pointer holds the memory address of the next instruction to be executed.
-        put("%esp", String.valueOf(MEMORY_SIZE)); // The stack register, %esp, always contains a pointer to the current top of the stack, wherever it is.
-        put("zero_flag", ""); // This flag is set to true if the result of the instruction is zero.
-        put("sign_flag", ""); // This is set to the sign of the last result.
+    HashMap<String, Integer> cpuRegisters = new HashMap<String, Integer>() {{
+        put("%eax", 0);
+        put("%ebx", 0);
+        put("%ecx", 0);
+        put("%eip", 0); // Instruction pointer holds the memory address of the next instruction to be executed.
+        put("%esp", MEMORY_SIZE); // The stack register, %esp, always contains a pointer to the current top of the stack, wherever it is.
+        put("cmp_flag", 0); // This is a custom flag to store the instruction result.
     }};
 
     // Patterns used to identify addressing modes
@@ -45,9 +44,9 @@ public class AssemblyInterpreter {
         asmi.memory[54] = "5";
 
         // Put value at location 50 in ebx to show once program exits
-        asmi.memory[0] = "movl 50, %ebx";
-        asmi.memory[1] = "movl $1, %eax";
-        asmi.memory[2] = "int $0x80";
+        //asmi.memory[0] = "movl 50, %ebx";
+        //asmi.memory[1] = "movl $1, %eax";
+        //asmi.memory[2] = "int $0x80";
 
         // Push a value onto stack and move to exb to show once program exits
         /*
@@ -58,21 +57,32 @@ public class AssemblyInterpreter {
         asmi.memory[4] = "int $0x80";
         */
 
+        // cmp test
+        asmi.memory[0] = "movl $1, %eax     "; // put 1 in eax
+        asmi.memory[1] = "movl $2, %ebx     "; // put 2 in ebx
+        asmi.memory[2] = "start:            ";
+        asmi.memory[3] = "cmpl %ebx, %eax   "; // compare two values
+        asmi.memory[4] = "je 6              "; // if equals, exit
+        asmi.memory[5] = "movl $2, %eax     "; // put 2 in eax
+        asmi.memory[6] = "jmp 2             "; // jump to start
+        asmi.memory[7] = "end:              ";
+        asmi.memory[8] = "movl $1, %eax     ";
+        asmi.memory[9] = "int $0x80         ";
+
         asmi.run();
 
     }
 
     public void run() {
 
-        int eip = 0;
-
         do {
 
+            int eip = cpuRegisters.get("%eip");
             String instruction = memory[eip];
             if (instruction == null) {
                 break;
             }
-            instruction = replaceLabel(instruction);
+            //instruction = replaceLabel(instruction);
 
             String[] instructionParts = instruction.split(" ");
             switch (instructionParts[0]) {
@@ -91,10 +101,15 @@ public class AssemblyInterpreter {
                 case "cmpl":
                     cmpl(instructionParts);
                     break;
+                case "jmp":
+                    jmp(instructionParts);
+                    break;
+                case "je":
+                    je(instructionParts);
+                    break;
             }
 
-            eip++;
-            cpuRegisters.replace("%eip", String.valueOf(eip));
+            cpuRegisters.replace("%eip", ++eip); // eip cannot be set like this in case of jump
 
         } while (true);
 
@@ -109,11 +124,33 @@ public class AssemblyInterpreter {
     public void reset() {
         memory = new String[MEMORY_SIZE];
         for (String key : cpuRegisters.keySet()) {
-            cpuRegisters.replace(key, "");
+            cpuRegisters.replace(key, 0);
         }
-        cpuRegisters.replace("%esp", String.valueOf(MEMORY_SIZE));
+        cpuRegisters.replace("%esp", MEMORY_SIZE);
     }
 
+    private void jmp(String[] instructionParts) {
+
+        // Jump no matter what. This does not need to be preceded by a comparison.
+        String location = instructionParts[1];
+        cpuRegisters.replace("%eip", Integer.parseInt(location));
+
+    }
+
+    private void je(String[] instructionParts) {
+
+        /*
+        This is a flow control instruction which says to jump to the location if
+        the values that were just compared are equal (that's what the e of je means).
+        It uses the status register to hold the value of the last comparison.
+        */
+
+        if (cpuRegisters.get("cmp_flag").equals(0)) {
+            String location = instructionParts[1];
+            cpuRegisters.replace("%eip", Integer.parseInt(location));
+        }
+
+    }
 
     private void cmpl(String[] instructionParts) {
 
@@ -126,22 +163,18 @@ public class AssemblyInterpreter {
         operand1 = getDataFromAddress(operand1);
         operand2 = getDataFromAddress(operand2);
 
-        int result = Integer.parseInt(operand1) - Integer.parseInt(operand2);
+        int operand1Int = Integer.parseInt(operand1);
+        int operand2Int = Integer.parseInt(operand2);
 
-        if (result == 0) {
-            cpuRegisters.replace("zero_flag", "1");
-            cpuRegisters.replace("sign_flag", "0");
-        } else if (result > 0) {
-            cpuRegisters.replace("zero_flag", "0");
-            cpuRegisters.replace("sign_flag", "0");
-        } else if (result < 0) {
-            cpuRegisters.replace("zero_flag", "0");
-            cpuRegisters.replace("sign_flag", "1");
+        // In real life, the flags register contains multiple flags (zero flag, carry flag, etc.).
+        // To keep things simple, we are using a single flag to store the instruction result.
+        if (operand1Int == operand2Int) {
+            cpuRegisters.replace("cmp_flag", 0);
+        } else if (operand2Int > operand1Int) {
+            cpuRegisters.replace("cmp_flag", 1);
+        } else if (operand2Int < operand1Int) {
+            cpuRegisters.replace("cmp_flag", -1);
         }
-
-        // Reference: https://reverseengineering.stackexchange.com/a/20897
-        // need to think better on this...
-
 
     }
 
@@ -160,9 +193,8 @@ public class AssemblyInterpreter {
 
         String address = instructionParts[1];
         String data = getDataFromAddress(address);
-        int esp = Integer.parseInt(cpuRegisters.get("%esp"));
-        esp--;
-        cpuRegisters.replace("%esp", String.valueOf(esp));
+        int esp = cpuRegisters.get("%esp");
+        cpuRegisters.replace("%esp", --esp);
         memory[esp] = data;
 
     }
@@ -177,11 +209,10 @@ public class AssemblyInterpreter {
         */
 
         String address = instructionParts[1];
-        int esp = Integer.parseInt(cpuRegisters.get("%esp"));
+        int esp = cpuRegisters.get("%esp");
         String data = memory[esp];
         moveDataToAddress(data, address);
-        esp++;
-        cpuRegisters.replace("%esp", String.valueOf(esp));
+        cpuRegisters.replace("%esp", ++esp);
 
     }
 
@@ -202,7 +233,7 @@ public class AssemblyInterpreter {
 
                 // System call number 1 is the exit system call,
                 // which requires the status code to be placed in %ebx.
-                case "1":
+                case 1:
                     System.out.println("exit status: " + cpuRegisters.get("%ebx"));
                     System.exit(0);
                     break;
@@ -235,7 +266,7 @@ public class AssemblyInterpreter {
         // Register addressing mode
         // The instruction contains a register to access, rather than a memory location.
         if (REGISTER_PATTERN.matcher(address).matches()) {
-            return cpuRegisters.get(address);
+            return String.valueOf(cpuRegisters.get(address));
         }
 
         // Direct addressing mode
@@ -257,7 +288,7 @@ public class AssemblyInterpreter {
         // pointer to where the data should be accessed.
         if (INDIRECT_PATTERN.matcher(address).matches()) {
             address = address.substring(1, 5); // Removes ()
-            address = cpuRegisters.get(address);
+            address = String.valueOf(cpuRegisters.get(address));
             return memory[Integer.parseInt(address)];
         }
 
@@ -267,7 +298,7 @@ public class AssemblyInterpreter {
         if (BASE_PATTERN.matcher(address).matches()) {
             String offset = address.substring(0, address.indexOf("("));
             address = address.substring(address.indexOf("(") + 1, address.length() - 1);
-            address = cpuRegisters.get(address);
+            address = String.valueOf(cpuRegisters.get(address));
             return memory[Integer.parseInt(address) + Integer.parseInt(offset)];
         }
 
@@ -282,7 +313,7 @@ public class AssemblyInterpreter {
         // Register addressing mode
         // The instruction contains a register to access, rather than a memory location.
         if (REGISTER_PATTERN.matcher(address).matches()) {
-            cpuRegisters.replace(address, data);
+            cpuRegisters.replace(address, Integer.parseInt(data));
             return;
         }
 
@@ -306,7 +337,7 @@ public class AssemblyInterpreter {
         // pointer to where the data should be accessed.
         if (INDIRECT_PATTERN.matcher(address).matches()) {
             address = address.substring(1, 5); // Removes ()
-            address = cpuRegisters.get(address);
+            address = String.valueOf(cpuRegisters.get(address));
             memory[Integer.parseInt(address)] = data;
         }
 
@@ -316,7 +347,7 @@ public class AssemblyInterpreter {
         if (BASE_PATTERN.matcher(address).matches()) {
             String offset = address.substring(0, address.indexOf("("));
             address = address.substring(address.indexOf("(") + 1, address.length() - 1);
-            address = cpuRegisters.get(address);
+            address = String.valueOf(cpuRegisters.get(address));
             memory[Integer.parseInt(address) + Integer.parseInt(offset)] = data;
         }
 
@@ -348,15 +379,12 @@ public class AssemblyInterpreter {
         String index = valuesParts[1];
         String size = valuesParts[2];
 
-        // Handle omitted
-        offset = offset.equals("") ? "0" : cpuRegisters.get(offset);
-        index = index.equals("") ? "0" : cpuRegisters.get(index);
-        size = size.equals("") ? "1" : size;
+        int baseAddressInt = Integer.parseInt(baseAddress);
+        int offsetInt = offset.equals("") ? 0 : cpuRegisters.get(offset);
+        int indexInt = index.equals("") ? 0 : cpuRegisters.get(index);
+        int sizeInt = size.equals("") ? 1 : Integer.parseInt(size);
 
-        return Integer.parseInt(baseAddress)
-                + Integer.parseInt(offset)
-                + Integer.parseInt(index)
-                * Integer.parseInt(size);
+        return baseAddressInt + offsetInt + indexInt * sizeInt;
 
     }
 

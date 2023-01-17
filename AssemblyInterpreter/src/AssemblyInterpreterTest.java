@@ -11,7 +11,7 @@ class AssemblyInterpreterTest {
         asmi.reset();
         asmi.memory[0] = "movl $100, %eax";
         asmi.run();
-        assertEquals("100", asmi.cpuRegisters.get("%eax"));
+        assertEquals(100, asmi.cpuRegisters.get("%eax"));
     }
 
     @Test
@@ -20,7 +20,7 @@ class AssemblyInterpreterTest {
         asmi.memory[0] = "movl $100, %ebx";
         asmi.memory[1] = "movl %ebx, %eax";
         asmi.run();
-        assertEquals("100", asmi.cpuRegisters.get("%eax"));
+        assertEquals(100, asmi.cpuRegisters.get("%eax"));
     }
 
     @Test
@@ -29,7 +29,7 @@ class AssemblyInterpreterTest {
         asmi.memory[5] = "100"; // load data
         asmi.memory[0] = "movl 5, %eax";
         asmi.run();
-        assertEquals("100", asmi.cpuRegisters.get("%eax"));
+        assertEquals(100, asmi.cpuRegisters.get("%eax"));
     }
 
     @Test
@@ -39,7 +39,7 @@ class AssemblyInterpreterTest {
         asmi.memory[0] = "movl $5, %ebx";
         asmi.memory[1] = "movl (%ebx), %eax";
         asmi.run();
-        assertEquals("100", asmi.cpuRegisters.get("%eax"));
+        assertEquals(100, asmi.cpuRegisters.get("%eax"));
     }
 
     @Test
@@ -49,7 +49,7 @@ class AssemblyInterpreterTest {
         asmi.memory[0] = "movl $1, %ebx";
         asmi.memory[1] = "movl 4(,%ebx,), %eax";
         asmi.run();
-        assertEquals("100", asmi.cpuRegisters.get("%eax"));
+        assertEquals(100, asmi.cpuRegisters.get("%eax"));
     }
 
     @Test
@@ -59,7 +59,7 @@ class AssemblyInterpreterTest {
         asmi.memory[0] = "movl $4, %ebx";
         asmi.memory[1] = "movl 1(%ebx), %eax";
         asmi.run();
-        assertEquals("100", asmi.cpuRegisters.get("%eax"));
+        assertEquals(100, asmi.cpuRegisters.get("%eax"));
     }
 
 }
