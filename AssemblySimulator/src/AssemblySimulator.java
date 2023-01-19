@@ -1,4 +1,5 @@
 import java.util.HashMap;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 public class AssemblySimulator {
@@ -12,6 +13,7 @@ public class AssemblySimulator {
         put("%eax", 0);
         put("%ebx", 0);
         put("%ecx", 0);
+        put("%edi", 0);
         put("%eip", 0); // Instruction pointer holds the memory address of the next instruction to be executed.
         put("%esp", MEMORY_SIZE); // The stack register, %esp, always contains a pointer to the current top of the stack, wherever it is.
         put("cmp_flag", 0); // This is a custom flag to store the instruction result.
@@ -29,45 +31,33 @@ public class AssemblySimulator {
 
         AssemblySimulator as = new AssemblySimulator();
 
-        // Just testing move instruction
-        //asmi.memory[0] = "movl 100(,%ecx,1), %eax";
-        //asmi.memory[0] = "movl $1, %eax";
-        //asmi.memory[0] = "movl 4(%eax), %ebx";
-        //asmi.memory[0] = "movl $2, %ebx";
-
         // Load some values in memory
-        as.memory[49] = "label_test:";
-        as.memory[50] = "1";
-        as.memory[51] = "2";
-        as.memory[52] = "3";
-        as.memory[53] = "4";
-        as.memory[54] = "5";
+        as.memory[49] = "numbers:";
+        as.memory[50] = "3";
+        as.memory[51] = "67";
+        as.memory[52] = "34";
+        as.memory[53] = "222";
+        as.memory[54] = "0";
 
-        // Put value at location 50 in ebx to show once program exits
-        //asmi.memory[0] = "movl 50, %ebx";
-        //asmi.memory[1] = "movl $1, %eax";
-        //asmi.memory[2] = "int $0x80";
+        // find maximum
+        as.memory[0] = "_start:                         ";
+        as.memory[1] = "movl $0, %edi                   "; // move 0 to index register
+        as.memory[2] = "movl numbers(,%edi,4), %eax     "; // load first byte of data
+        as.memory[3] = "movl %eax, %ebx                 "; // first item is the biggest
 
-        // Push a value onto stack and move to exb to show once program exits
-        /*
-        asmi.memory[0] = "pushl $99";
-        asmi.memory[1] = "pushl $88";
-        asmi.memory[2] = "movl (%esp), %ebx";
-        asmi.memory[3] = "movl $1, %eax";
-        asmi.memory[4] = "int $0x80";
-        */
+        as.memory[4] = "start_loop:                     ";
+        as.memory[5] = "cmpl $0, %eax                   "; // check if hit the end
+        as.memory[6] = "je loop_exit                    ";
+        as.memory[7] = "incl %edi                       "; // load next value
+        as.memory[8] = "movl numbers(,%edi,4), %eax     ";
+        as.memory[9] = "cmpl %ebx, %eax                 "; // compare values
+        as.memory[10] = "jle start_loop                 "; // jump to loop beginning if the new is not bigger
+        as.memory[11] = "movl %eax, %ebx                "; // move the value as the largest
+        as.memory[12] = "jmp start_loop                 ";
 
-        // cmp test
-        as.memory[0] = "movl $1, %eax     "; // put 1 in eax
-        as.memory[1] = "movl $2, %ebx     "; // put 2 in ebx
-        as.memory[2] = "start:            ";
-        as.memory[3] = "cmpl %ebx, %eax   "; // compare two values
-        as.memory[4] = "je 6              "; // if equals, exit
-        as.memory[5] = "movl $2, %eax     "; // put 2 in eax
-        as.memory[6] = "jmp 2             "; // jump to start
-        as.memory[7] = "end:              ";
-        as.memory[8] = "movl $1, %eax     ";
-        as.memory[9] = "int $0x80         ";
+        as.memory[13] = "loop_exit:                     ";
+        as.memory[14] = "movl $1, %eax                  ";  // 1 is the exit() syscall
+        as.memory[15] = "int $0x80                      ";
 
         as.run();
 
@@ -75,16 +65,21 @@ public class AssemblySimulator {
 
     public void run() {
 
+        int eip;
+        String instruction;
+        String[] instructionParts;
+        boolean jump;
+        replaceLabels();
+
         do {
 
-            int eip = cpuRegisters.get("%eip");
-            String instruction = memory[eip];
+            eip = cpuRegisters.get("%eip");
+            instruction = memory[eip];
             if (instruction == null) {
                 break;
             }
-            //instruction = replaceLabel(instruction);
-
-            String[] instructionParts = instruction.split(" ");
+            jump = false;
+            instructionParts = instruction.trim().split(" ");
             switch (instructionParts[0]) {
                 case "movl":
                     movl(instructionParts);
@@ -103,23 +98,61 @@ public class AssemblySimulator {
                     break;
                 case "jmp":
                     jmp(instructionParts);
+                    jump = true;
                     break;
                 case "je":
-                    je(instructionParts);
+                    jump = je(instructionParts);
+                    break;
+                case "jle":
+                    jump = jle(instructionParts);
                     break;
             }
 
-            cpuRegisters.replace("%eip", ++eip); // eip cannot be set like this in case of jump
+            // if not jump, increment eip
+            if (!jump) {
+                cpuRegisters.replace("%eip", ++eip);
+            }
 
         } while (true);
 
     }
 
-    private String replaceLabel(String instruction) {
-        String address = "";
-        // TODO: Implement the function to replace label to address
-        return address;
+    private void replaceLabels() {
+
+        // Put all labels in a hashmap
+        HashMap<String, Integer> labels = new HashMap<>();
+
+        for (int i = 0; i < MEMORY_SIZE; i++) {
+            String instruction = memory[i];
+            if (instruction == null) {
+                continue;
+            }
+            if (instruction.contains(":")) {
+                labels.put(instruction.trim().replace(":", ""), i);
+            }
+        }
+
+        // Replace all labels
+        // TODO: Can we optimize this?
+        for (Map.Entry<String, Integer> entry : labels.entrySet()) {
+            String label = entry.getKey();
+            Integer location = entry.getValue();
+
+            for (int i = 0; i < MEMORY_SIZE; i++) {
+                String instruction = memory[i];
+                if (instruction == null) {
+                    continue;
+                }
+                if (instruction.contains(label)
+                        && i != location) { // do not replace itself
+                    location++; // point to next instruction after label
+                    memory[i] = instruction.replace(label, location.toString());
+                }
+            }
+        }
+
     }
+
 
     public void reset() {
         memory = new String[MEMORY_SIZE];
@@ -137,7 +170,7 @@ public class AssemblySimulator {
 
     }
 
-    private void je(String[] instructionParts) {
+    private boolean je(String[] instructionParts) {
 
         /*
         This is a flow control instruction which says to jump to the location if
@@ -145,10 +178,25 @@ public class AssemblySimulator {
         It uses the status register to hold the value of the last comparison.
         */
 
-        if (cpuRegisters.get("cmp_flag").equals(0)) {
+        if (cpuRegisters.get("cmp_flag").equals(0)) { // zero means equal
             String location = instructionParts[1];
             cpuRegisters.replace("%eip", Integer.parseInt(location));
+            return true;
         }
+        return false;
+
+    }
+
+    private boolean jle(String[] instructionParts) {
+
+        // Jump if the second value was less than or equal to the first value
+        if (cpuRegisters.get("cmp_flag").equals(0) // zero means equal
+                || cpuRegisters.get("cmp_flag").equals(-1)) { // -1 means op2 < op1
+            String location = instructionParts[1];
+            cpuRegisters.replace("%eip", Integer.parseInt(location));
+            return true;
+        }
+        return false;
 
     }
 
