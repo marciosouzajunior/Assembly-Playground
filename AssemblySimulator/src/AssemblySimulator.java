@@ -1,7 +1,7 @@
 import java.util.HashMap;
 import java.util.regex.Pattern;
 
-public class AssemblyInterpreter {
+public class AssemblySimulator {
 
     // Memory to store programs and data (there is no difference between then, except how it is used).
     static int MEMORY_SIZE = 100;
@@ -27,7 +27,7 @@ public class AssemblyInterpreter {
 
     public static void main(String[] args) {
 
-        AssemblyInterpreter asmi = new AssemblyInterpreter();
+        AssemblySimulator as = new AssemblySimulator();
 
         // Just testing move instruction
         //asmi.memory[0] = "movl 100(,%ecx,1), %eax";
@@ -36,12 +36,12 @@ public class AssemblyInterpreter {
         //asmi.memory[0] = "movl $2, %ebx";
 
         // Load some values in memory
-        asmi.memory[49] = "label_test:";
-        asmi.memory[50] = "1";
-        asmi.memory[51] = "2";
-        asmi.memory[52] = "3";
-        asmi.memory[53] = "4";
-        asmi.memory[54] = "5";
+        as.memory[49] = "label_test:";
+        as.memory[50] = "1";
+        as.memory[51] = "2";
+        as.memory[52] = "3";
+        as.memory[53] = "4";
+        as.memory[54] = "5";
 
         // Put value at location 50 in ebx to show once program exits
         //asmi.memory[0] = "movl 50, %ebx";
@@ -58,18 +58,18 @@ public class AssemblyInterpreter {
         */
 
         // cmp test
-        asmi.memory[0] = "movl $1, %eax     "; // put 1 in eax
-        asmi.memory[1] = "movl $2, %ebx     "; // put 2 in ebx
-        asmi.memory[2] = "start:            ";
-        asmi.memory[3] = "cmpl %ebx, %eax   "; // compare two values
-        asmi.memory[4] = "je 6              "; // if equals, exit
-        asmi.memory[5] = "movl $2, %eax     "; // put 2 in eax
-        asmi.memory[6] = "jmp 2             "; // jump to start
-        asmi.memory[7] = "end:              ";
-        asmi.memory[8] = "movl $1, %eax     ";
-        asmi.memory[9] = "int $0x80         ";
+        as.memory[0] = "movl $1, %eax     "; // put 1 in eax
+        as.memory[1] = "movl $2, %ebx     "; // put 2 in ebx
+        as.memory[2] = "start:            ";
+        as.memory[3] = "cmpl %ebx, %eax   "; // compare two values
+        as.memory[4] = "je 6              "; // if equals, exit
+        as.memory[5] = "movl $2, %eax     "; // put 2 in eax
+        as.memory[6] = "jmp 2             "; // jump to start
+        as.memory[7] = "end:              ";
+        as.memory[8] = "movl $1, %eax     ";
+        as.memory[9] = "int $0x80         ";
 
-        asmi.run();
+        as.run();
 
     }
 
