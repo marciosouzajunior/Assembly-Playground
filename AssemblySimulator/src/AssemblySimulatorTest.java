@@ -62,4 +62,13 @@ class AssemblySimulatorTest {
         assertEquals(100, as.cpuRegisters.get("%eax"));
     }
 
+    @Test
+    void incl_should_increment_value_by_one(){
+        as.reset();
+        as.memory[5] = "100";
+        as.memory[0] = "incl 5";
+        as.run();
+        assertEquals("101", as.memory[5]);
+    }
+
 }

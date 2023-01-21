@@ -49,7 +49,7 @@ public class AssemblySimulator {
         as.memory[5] = "cmpl $0, %eax                   "; // check if hit the end
         as.memory[6] = "je loop_exit                    ";
         as.memory[7] = "incl %edi                       "; // load next value
-        as.memory[8] = "movl numbers(,%edi,4), %eax     ";
+        as.memory[8] = "movl numbers(,%edi,1), %eax     ";
         as.memory[9] = "cmpl %ebx, %eax                 "; // compare values
         as.memory[10] = "jle start_loop                 "; // jump to loop beginning if the new is not bigger
         as.memory[11] = "movl %eax, %ebx                "; // move the value as the largest
@@ -106,6 +106,9 @@ public class AssemblySimulator {
                 case "jle":
                     jump = jle(instructionParts);
                     break;
+                case "incl":
+                    incl(instructionParts);
+                    break;
             }
 
             // if not jump, increment eip
@@ -153,13 +156,21 @@ public class AssemblySimulator {
 
     }
 
-
     public void reset() {
         memory = new String[MEMORY_SIZE];
         for (String key : cpuRegisters.keySet()) {
             cpuRegisters.replace(key, 0);
         }
         cpuRegisters.replace("%esp", MEMORY_SIZE);
+    }
+
+    private void incl(String[] instructionParts) {
+
+        String address = instructionParts[1];
+        String value = getDataFromAddress(address);
+        int valueInc = Integer.parseInt(value) + 1;
+        moveDataToAddress(String.valueOf(valueInc), address);
+
     }
 
     private void jmp(String[] instructionParts) {
